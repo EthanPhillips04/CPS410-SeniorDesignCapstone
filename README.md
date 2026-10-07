@@ -15,41 +15,41 @@ Defined Requirements:
 
 Create Schema for players/teams (Rough Draft):
 Sport: 
-sport_id
+sport_id,
 name
 
 League:
-league_id
-sport_id
-name
+league_id,
+sport_id,
+name,
 level
 
 Team:
-team_id
-league_id
-name
+team_id,
+league_id,
+name,
 city/ location
 
 Player:
-team_id
-player_id
-age
-name
+team_id,
+player_id,
+age,
+name,
 position
 
 Player_Stats:
-player_id
-games_played
-season
-minutes
-stat_1
-.....
+player_id,
+games_played,
+season,
+minutes,
+stat_1,
+.....,
 stat_n
 
 Roster:
-team_id
-player_id
-season
+team_id,
+player_id,
+season,
 league_id
 
 Player_Ratings:
