@@ -1,0 +1,128 @@
+﻿@page "/basketball"
+@rendermode InteractiveServer
+
+@using Microsoft.EntityFrameworkCore
+@using SportsAnalytics.Web.Data
+@using SportsAnalytics.Web.Models
+@using SportsAnalytics.Web.Services
+
+@inject IDbContextFactory<SportsDbContext> DbFactory
+@inject NbaImportService NbaService
+
+<h1>NBA Players</h1>
+
+<p>NBA player information stored in PostgreSQL.</p>
+
+<button class="btn btn-primary"
+        @onclick="ImportPlayers"
+        disabled="@loading">
+    @(loading ? "Importing..." : "Import NBA Players")
+</button>
+
+<button class="btn btn-secondary ms-2"
+        @onclick="RefreshPlayers"
+        disabled="@loading">
+    Refresh Table
+</button>
+
+<p class="mt-3">@statusMessage</p>
+
+@if (players.Count == 0)
+{
+    <p>No players are stored in the database yet.</p>
+}
+else
+{
+    <h4>Total Players: @players.Count</h4>
+
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Player ID</th>
+                <th>First Name</th>
+                <th>Last Name</th>
+                <th>Position</th>
+                <th>Team</th>
+            </tr>
+        </thead>
+
+        <tbody>
+            @foreach (var player in players)
+            {
+                <tr>
+                    <td>@player.BallDontLiePlayerId</td>
+                    <td>@player.FirstName</td>
+                    <td>@player.LastName</td>
+                    <td>@player.Position</td>
+                    <td>@(player.Team?.Name ?? "Unknown")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<NbaPlayer> players = new();
+    private string statusMessage = "";
+    private bool loading = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPlayers();
+    }
+
+    private async Task LoadPlayers()
+    {
+        await using var db =
+            await DbFactory.CreateDbContextAsync();
+
+        players = await db.NbaPlayers
+            .Include(p => p.Team)
+            .AsNoTracking()
+            .OrderBy(p => p.LastName)
+            .ThenBy(p => p.FirstName)
+            .ToListAsync();
+    }
+
+    private async Task RefreshPlayers()
+    {
+        try
+        {
+            await LoadPlayers();
+            statusMessage = "Table refreshed successfully.";
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"Refresh failed: {ex.Message}";
+        }
+    }
+
+    private async Task ImportPlayers()
+    {
+        if (loading)
+            return;
+
+        loading = true;
+        statusMessage = "Importing NBA players...";
+
+        try
+        {
+            int count =
+                await NbaService.ImportPlayersAsync();
+
+            await LoadPlayers();
+
+            statusMessage =
+                $"Successfully processed {count} NBA players.";
+        }
+        catch (Exception ex)
+        {
+            statusMessage =
+                $"Import failed: {ex.Message}";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}
