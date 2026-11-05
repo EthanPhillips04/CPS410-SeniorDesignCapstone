@@ -1,5 +1,14 @@
 # SportsAnalytics
 
+If PostGreSQL is not setup yet do this first:
+Open PgAdmin / PostGreSQL
+Open the dropdowns servers => databases
+right click databases and create new database
+Name the new database EXACTLY "SportsAnalyticsDB"
+
+
+
+
 Steps To Download the updated project and get the API and SQL database connected
 1. Select the green "Code" Button and download the ZIP file
 2. Extract the file to your own repository file/ where ever you wanna store the capstone
@@ -13,7 +22,8 @@ Steps To Download the updated project and get the API and SQL database connected
 {
   "ConnectionStrings": {
     "DefaultConnection": "Host=localhost;Port=5432;Database=SportsAnalyticsDB;Username=postgres;Password=YOUR_POSTGRES_PASSWORD"
-  },
+    },
+  
   "BallDontLie": {
     "ApiKey": "BALLDONTLIE_API_KEY"
   }
@@ -26,4 +36,9 @@ Get-Migration
 (Make sure this runs with no errors before running update-database)
 
 Update-Database
+
+10. close and reopen your PgAdmin / postgreSQL => navigate to your SportsAnalyticsDB database => dropdown Schemas => Tables -- you should see 4 tables have been created inside PostGreSQL
+11. Launch the project in visual studio and add /basketball to the end of the url | this shoould look like "https://localhost:7008/basketball"
+12. Click Import NBA players and this should get the first 100 players alphabetically in the NBA
+13. Everything is done, close the program and relaunch in visual studio and navigate back to the /basketball url => the list should automatically appear without importing again since all data should be stored now in the SQL database
 
