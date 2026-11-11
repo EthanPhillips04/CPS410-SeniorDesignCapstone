@@ -7,6 +7,7 @@ right click databases and create new database
 Name the new database EXACTLY "SportsAnalyticsDB"
 
 
+ALL STAR API KEY: 59880cc7-33cb-4da3-b970-f14938a8eaf9
 
 
 Steps To Download the updated project and get the API and SQL database connected
