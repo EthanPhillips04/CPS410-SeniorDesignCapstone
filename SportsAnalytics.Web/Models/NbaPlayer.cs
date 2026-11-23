@@ -16,4 +16,9 @@ public class NbaPlayer
     public int? NbaTeamId { get; set; }
 
     public NbaTeam? Team { get; set; }
+
+    public bool IsActive { get; set; } = false;
+
+    public DateTime? LastRosterSyncUtc { get; set; }
+
 }

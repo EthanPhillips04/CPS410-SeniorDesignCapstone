@@ -16,12 +16,19 @@ public class SportsDbContext : DbContext
     public DbSet<BasketballPlayer> BasketballPlayers
         => Set<BasketballPlayer>();
 
-    // New player and team tables
+    // New player & team tables & stats table for NBA data
     public DbSet<NbaPlayer> NbaPlayers
         => Set<NbaPlayer>();
 
     public DbSet<NbaTeam> NbaTeams
         => Set<NbaTeam>();
+
+    public DbSet<NbaGame> NbaGames
+        => Set<NbaGame>();
+
+    public DbSet<NbaPlayerGameStat> NbaPlayerGameStats
+        => Set<NbaPlayerGameStat>();
+
 
     protected override void OnModelCreating(
         ModelBuilder modelBuilder)
@@ -46,6 +53,35 @@ public class SportsDbContext : DbContext
             .HasOne(p => p.Team)
             .WithMany(t => t.Players)
             .HasForeignKey(p => p.NbaTeamId);
+
+        // Each BALLDONTLIE game ID must be unique.
+        modelBuilder.Entity<NbaGame>()
+            .HasIndex(g => g.BallDontLieGameId)
+            .IsUnique();
+
+        // A player can have only one stat row per game.
+        modelBuilder.Entity<NbaPlayerGameStat>()
+            .HasIndex(s => new
+            {
+                s.NbaPlayerId,
+                s.NbaGameId
+            })
+            .IsUnique();
+
+        // Connect each stat to its player.
+        modelBuilder.Entity<NbaPlayerGameStat>()
+            .HasOne(s => s.Player)
+            .WithMany()
+            .HasForeignKey(s => s.NbaPlayerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Connect each stat to its game.
+        modelBuilder.Entity<NbaPlayerGameStat>()
+            .HasOne(s => s.Game)
+            .WithMany()
+            .HasForeignKey(s => s.NbaGameId)
+            .OnDelete(DeleteBehavior.Restrict);
+
     }
 }
 
