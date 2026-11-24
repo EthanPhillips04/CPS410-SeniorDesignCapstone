@@ -1,0 +1,228 @@
+@page "/team-builder"
+@rendermode InteractiveServer
+
+@using Microsoft.EntityFrameworkCore
+@using SportsAnalytics.Web.Data
+@using SportsAnalytics.Web.Models
+
+@inject IDbContextFactory<SportsDbContext> DbFactory
+@inject ILogger<TeamBuilder> Logger
+
+<PageTitle>Team Builder</PageTitle>
+
+<h1>Team Builder</h1>
+
+<div class="row g-4">
+    <section class="col-lg-5" aria-labelledby="lineup-heading">
+        <h2 id="lineup-heading" class="h4">Starting lineup (@lineup.Count/5)</h2>
+        <ul class="list-group">
+            @foreach (var slot in Positions)
+            {
+                <li class="list-group-item d-flex flex-wrap align-items-center justify-content-between gap-2">
+                    <div>
+                        <strong>@slot.PositionName (@slot.Code)</strong>
+                        <div>@(lineup.TryGetValue(slot.Code, out var starter) ? PlayerName(starter) : "Open")</div>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-sm btn-outline-primary"
+                                aria-label="@($"Search players for {slot.PositionName}")"
+                                aria-pressed="@(selectedPosition == slot.Code ? "true" : "false")"
+                                @onclick="() => SelectPosition(slot.Code)">
+                            @(selectedPosition == slot.Code ? "Selected" : "Choose")
+                        </button>
+                        @if (starter is not null)
+                        {
+                            <button type="button" class="btn btn-sm btn-outline-secondary"
+                                    aria-label="@($"Remove {PlayerName(starter)} from {slot.PositionName}")"
+                                    @onclick="() => RemovePlayer(slot.Code)">
+                                Remove
+                            </button>
+                        }
+                    </div>
+                </li>
+            }
+        </ul>
+    </section>
+
+    <section class="col-lg-7" aria-labelledby="players-heading">
+        <h2 id="players-heading" class="h4">Players for @Positions.First(slot => slot.Code == selectedPosition).PositionName</h2>
+        <div role="status" class="mb-2">@statusMessage</div>
+
+        @if (loading)
+        {
+            <p role="status">Loading active NBA players…</p>
+        }
+        else if (loadFailed)
+        {
+            <p role="alert">The player directory could not be loaded.</p>
+            <button type="button" class="btn btn-outline-primary" @onclick="LoadPlayersAsync">Retry</button>
+        }
+        else if (players.Count == 0)
+        {
+            <p>No active players are stored yet.</p>
+            <a href="basketball">Open Basketball to sync active NBA players</a>
+        }
+        else
+        {
+            <label for="team-builder-search" class="form-label">Search by player name or team</label>
+            <input id="team-builder-search" type="search" class="form-control mb-2"
+                   @bind="search" @bind:event="oninput" />
+            <div class="form-check mb-3">
+                <input id="team-builder-eligible" type="checkbox" class="form-check-input" @bind="eligibleOnly" />
+                <label for="team-builder-eligible" class="form-check-label">Show eligible positions only</label>
+            </div>
+
+            var matches = SearchPlayers().ToList();
+            <p role="status">@matches.Count matching players</p>
+            @if (matches.Count == 0)
+            {
+                <p>Try a different search or show players at all positions.</p>
+            }
+            else
+            {
+                <ul class="list-group overflow-auto" style="max-height: 28rem;">
+                    @foreach (var player in matches)
+                    {
+                        var reason = UnavailableReason(player);
+                        <li @key="player.Id" class="list-group-item d-flex flex-wrap align-items-center justify-content-between gap-2">
+                            <div>
+                                <strong>@PlayerName(player)</strong>
+                                <div class="small text-body-secondary">
+                                    @(player.Team?.Name ?? "Unknown team") ·
+                                    @(string.IsNullOrWhiteSpace(player.Position) ? "Position unavailable" : player.Position)
+                                </div>
+                            </div>
+                            @if (reason is null)
+                            {
+                                <button type="button" class="btn btn-sm btn-primary"
+                                        aria-label="@($"{(lineup.ContainsKey(selectedPosition) ? "Replace starter with" : "Add")} {PlayerName(player)} at {selectedPosition}")"
+                                        @onclick="() => AssignPlayer(player)">
+                                    @(lineup.ContainsKey(selectedPosition) ? "Replace" : "Add")
+                                </button>
+                            }
+                            else
+                            {
+                                <span class="small text-body-secondary">@reason</span>
+                            }
+                        </li>
+                    }
+                </ul>
+            }
+        }
+    </section>
+</div>
+
+@code {
+    private static readonly (string Code, string PositionName)[] Positions =
+    [
+        ("PG", "Point Guard"),
+        ("SG", "Shooting Guard"),
+        ("SF", "Small Forward"),
+        ("PF", "Power Forward"),
+        ("C", "Center")
+    ];
+
+    private readonly Dictionary<string, NbaPlayer> lineup = new();
+    private List<NbaPlayer> players = new();
+    private string selectedPosition = "PG";
+    private string search = "";
+    private string statusMessage = "";
+    private bool eligibleOnly = true;
+    private bool loading = true;
+    private bool loadFailed;
+
+    protected override Task OnInitializedAsync() => LoadPlayersAsync();
+
+    private async Task LoadPlayersAsync()
+    {
+        loading = true;
+        loadFailed = false;
+
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            players = await db.NbaPlayers
+                .AsNoTracking()
+                .Include(player => player.Team)
+                .Where(player => player.IsActive)
+                .OrderBy(player => player.LastName)
+                .ThenBy(player => player.FirstName)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Could not load the active NBA player directory.");
+            loadFailed = true;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private IEnumerable<NbaPlayer> SearchPlayers()
+    {
+        var terms = search.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        return players.Where(player =>
+        {
+            var searchableText = $"{PlayerName(player)} {player.Team?.Name} {player.Team?.Abbreviation}";
+            return (!eligibleOnly || CanPlayPosition(player, selectedPosition)) &&
+                terms.All(term => searchableText.Contains(term, StringComparison.OrdinalIgnoreCase));
+        });
+    }
+
+    private static string PlayerName(NbaPlayer player) => $"{player.FirstName} {player.LastName}";
+
+    private static bool CanPlayPosition(NbaPlayer player, string slot)
+    {
+        var positions = player.Position.Split(
+            ['-', '/', ',', ';', '&'],
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        return positions.Any(position => position.ToUpperInvariant() switch
+        {
+            "PG" or "POINT GUARD" => slot == "PG",
+            "SG" or "SHOOTING GUARD" => slot == "SG",
+            "SF" or "SMALL FORWARD" => slot == "SF",
+            "PF" or "POWER FORWARD" => slot == "PF",
+            "C" or "CENTER" => slot == "C",
+            "G" or "GUARD" => slot is "PG" or "SG",
+            "F" or "FORWARD" => slot is "SF" or "PF",
+            _ => false
+        });
+    }
+
+    private string? UnavailableReason(NbaPlayer player)
+    {
+        var assignedSlot = lineup.FirstOrDefault(entry => entry.Value.Id == player.Id).Key;
+        if (assignedSlot is not null)
+            return $"Already in lineup at {assignedSlot}";
+
+        return CanPlayPosition(player, selectedPosition) ? null : $"Ineligible for {selectedPosition}";
+    }
+
+    private void SelectPosition(string slot)
+    {
+        selectedPosition = slot;
+        statusMessage = "";
+    }
+
+    private void AssignPlayer(NbaPlayer player)
+    {
+        var reason = UnavailableReason(player);
+        if (reason is not null)
+        {
+            statusMessage = $"{PlayerName(player)}: {reason}.";
+            return;
+        }
+
+        lineup[selectedPosition] = player;
+        statusMessage = $"{PlayerName(player)} assigned to {selectedPosition}.";
+    }
+
+    private void RemovePlayer(string slot)
+    {
+        if (lineup.Remove(slot, out var player))
+            statusMessage = $"{PlayerName(player)} removed from {slot}.";
+    }
+}
